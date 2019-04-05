@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Playground</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="">
+</head>
+
+<body>
+    <!--[if lt IE 7]>
+            <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="#">upgrade your browser</a> to improve your experience.</p>
+        <![endif]-->
+
+    <p id="warning"></p>
+
+    <script>
+        window.crypto = window.crypto || window.msCrypto;
+        if (!window.crypto) {
+            message = "ERROR: The cryptography functionality is not available." +
+                "This might happen if you are not using a HTTPS connection, or if your browser is outdated";
+            document.getElementById("warning").append(message);
+            throw new Error(message)
+        }
+    </script>
+    <div>
+        <textarea name="input-text" id="input-text" cols="30" rows="10">hello world</textarea>
+    </div>
+    <script>
+        function getData() {
+            return document.getElementById("input-text").value;
+        }
+
+        function generateSecurePassword(length) {
+            var array = window.crypto.getRandomValues(new Uint8Array(length));
+            return arrayToBase64(array);
+        }
+
+        function arrayToString(array) {
+            return String.fromCharCode.apply(String.fromCharCode, array);
+        }
+
+        function arrayToBase64(array) {
+            return window.btoa(arrayToString(array));
+        }
+
+        function base64ToArray(base64) {
+            return stringToArray(window.atob(base64));
+        }
+
+        function stringToArray(str) {
+            uint = new Uint8Array(str.length);
+            for (var i = 0, j = str.length; i < j; ++i) {
+                uint[i] = str.charCodeAt(i);
+            }
+            return uint;
+        }
+
+        encryption_data = {}
+
+        function getEncryptedData() {
+            return encryption_data["encryptedData"];
+        }
+
+        function getPassword() {
+            return encryption_data["password"];
+        }
+
+        function getSalt() {
+            return encryption_data["salt"];
+        }
+
+        function getIv() {
+            return encryption_data["iv"];
+        }
+
+        function getSaltedKey(passwordKey, salt, keyUsages) {
+            return window.crypto.subtle.deriveKey({
+                "name": "PBKDF2",
+                "salt": salt,
+                "iterations": 250000,
+                "hash": {
+                    "name": "SHA-256"
+                }
+            }, passwordKey, {
+                "name": "AES-GCM",
+                "length": 256
+            }, false, keyUsages);
+        }
+
+        function encryptData(data, password) {
+            dataAsBytes = stringToArray(data);
+            passAsBytes = stringToArray(password);
+
+            var _salt = null;
+            var _iv = null;
+            crypto.subtle.importKey("raw", passAsBytes, "PBKDF2", false, ["deriveKey"])
+                .then((passwordKey) => {
+                    const salt = window.crypto.getRandomValues(new Uint8Array(32));
+                    _salt = arrayToBase64(salt);
+                    return getSaltedKey(passwordKey, salt, ["encrypt"])
+                })
+                .then((passwordKey) => {
+                    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                    _iv = arrayToBase64(iv);
+                    return window.crypto.subtle.encrypt({
+                        "name": "AES-GCM",
+                        "iv": iv
+                    }, passwordKey, dataAsBytes);
+                })
+                .then((encryptedContent) => {
+                    const asString = arrayToBase64(new Uint8Array(encryptedContent));
+                    encryption_data = {
+                        "encryptedData": asString,
+                        "password": arrayToBase64(passAsBytes),
+                        "data": data,
+                        "salt": _salt,
+                        "iv": _iv
+                    }
+
+                    alert(asString);
+                })
+        }
+
+        function decryptData(decriptedData, password, salt, iv) {
+            dataAsBytes = base64ToArray(decriptedData);
+            passAsBytes = base64ToArray(password);
+
+            crypto.subtle.importKey("raw", passAsBytes, "PBKDF2", false, ["deriveKey"])
+                .then((passwordKey) => {
+                    salt = base64ToArray(salt);
+                    return getSaltedKey(passwordKey, salt, ["decrypt"])
+                })
+                .then((passwordKey) => {
+                    iv = base64ToArray(iv);
+                    return window.crypto.subtle.decrypt({
+                        "name": "AES-GCM",
+                        "iv": iv
+                    }, passwordKey, dataAsBytes);
+                })
+                .then((encryptedContent) => {
+                    const asString = arrayToBase64(new Uint8Array(encryptedContent));
+                    alert(window.atob(asString));
+                })
+        }
+    </script>
+    <button onclick="encryptData(getData(), generateSecurePassword(16))">Encript</button>
+    <button onclick="decryptData(getEncryptedData(), getPassword(), getSalt(), getIv())">Decript</button>
+</body>
+
+</html>
